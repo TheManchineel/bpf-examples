@@ -20,6 +20,49 @@
 	} while (0)
 #endif
 
+#ifdef NBPF_NPU
+static __always_inline int nbpf_parse_ethhdr_vlan(void *data, void *data_end,
+						  struct ethhdr **ethhdr,
+						  struct collect_vlans *vlans,
+						  void **next_pos)
+{
+	struct ethhdr *eth = (struct ethhdr *)data;
+	uintptr_t pos = (uintptr_t)data;
+	uintptr_t end = (uintptr_t)data_end;
+	__u16 h_proto;
+	struct vlan_hdr *vlh;
+
+	if (pos + sizeof(*eth) > end)
+		return -1;
+
+	pos += sizeof(*eth);
+	*ethhdr = eth;
+	h_proto = eth->h_proto;
+
+	if (proto_is_vlan(h_proto)) {
+		if (pos + sizeof(struct vlan_hdr) > end)
+			goto done;
+		vlh = (struct vlan_hdr *)pos;
+		h_proto = vlh->h_vlan_encapsulated_proto;
+		vlans->id[0] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
+		pos += sizeof(struct vlan_hdr);
+	}
+
+	if (proto_is_vlan(h_proto)) {
+		if (pos + sizeof(struct vlan_hdr) > end)
+			goto done;
+		vlh = (struct vlan_hdr *)pos;
+		h_proto = vlh->h_vlan_encapsulated_proto;
+		vlans->id[1] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
+		pos += sizeof(struct vlan_hdr);
+	}
+
+done:
+	*next_pos = (void *)pos;
+	return h_proto;
+}
+#endif
+
 /*
  * This map is for storing the DHCP relay server
  * IP address configured by user. It is received
@@ -112,8 +155,13 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 
 	NBPF_DEBUG_STOP(4);
 
+#ifdef NBPF_NPU
+	ether_type =
+		nbpf_parse_ethhdr_vlan(data, data_end, &eth, &vlans, &nh.pos);
+#else
 	nh.pos = data;
 	ether_type = parse_ethhdr_vlan(&nh, data_end, &eth, &vlans);
+#endif
 	NBPF_DEBUG_STOP(5);
 
 	/* check for valid ether type */
