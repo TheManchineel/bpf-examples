@@ -140,28 +140,41 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	void *data = (void *)(long)ctx->data;
 	NBPF_DEBUG_STOP(2);
 
-	struct collect_vlans vlans = { 0 };
+	struct collect_vlans vlans;
 	struct ethhdr *eth;
 	struct iphdr *ip;
 	struct iphdr oldip;
 	struct udphdr *udp;
 	__u32 *dhcp_srv;
-	int rc = XDP_PASS;
-	__u16 offset = static_offset;
-	__u16 ip_offset = 0;
-	int i = 0;
+	int rc;
+	__u16 offset;
+	__u16 ip_offset;
+	int i;
 
 	/* These keep track of the next header type and iterator pointer */
 	struct hdr_cursor nh;
 	int ether_type;
-	int h_proto = 0;
-	int key = 0;
-	int len = 0;
+	int h_proto;
+	int key;
+	int len;
 #ifdef NBPF_NPU
-	int npu_vlan_depth = 0;
+	int npu_vlan_depth;
 #endif
 
 	NBPF_DEBUG_STOP(3);
+
+	vlans.id[0] = 0;
+	vlans.id[1] = 0;
+	rc = XDP_PASS;
+	offset = static_offset;
+	ip_offset = 0;
+	i = 0;
+	h_proto = 0;
+	key = 0;
+	len = 0;
+#ifdef NBPF_NPU
+	npu_vlan_depth = 0;
+#endif
 
 	if (ctx->data + 1 > ctx->data_end)
 		return XDP_ABORTED;
