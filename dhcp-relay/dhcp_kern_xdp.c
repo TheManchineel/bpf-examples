@@ -21,6 +21,10 @@
 #endif
 
 #ifdef NBPF_NPU
+#define NBPF_ETH_P_IP ((__u16)0x0008)
+#define NBPF_ETH_P_8021Q ((__u16)0x0081)
+#define NBPF_ETH_P_8021AD ((__u16)0xa888)
+
 static __always_inline int nbpf_parse_ethhdr_vlan(void *data, void *data_end,
 						  struct ethhdr **ethhdr,
 						  struct collect_vlans *vlans,
@@ -156,8 +160,47 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	NBPF_DEBUG_STOP(4);
 
 #ifdef NBPF_NPU
-	ether_type =
-		nbpf_parse_ethhdr_vlan(data, data_end, &eth, &vlans, &nh.pos);
+	{
+		uintptr_t pos = ctx->data;
+		uintptr_t end = ctx->data_end;
+
+		if (pos + sizeof(*eth) > end) {
+			rc = XDP_ABORTED;
+			goto out;
+		}
+
+		eth = (struct ethhdr *)pos;
+		pos += sizeof(*eth);
+		ether_type = eth->h_proto;
+		nh.pos = (void *)pos;
+
+		if (ether_type == NBPF_ETH_P_8021Q ||
+		    ether_type == NBPF_ETH_P_8021AD) {
+			struct vlan_hdr *vlh;
+			if (pos + sizeof(*vlh) > end)
+				goto npu_eth_done;
+			vlh = (struct vlan_hdr *)pos;
+			vlans.id[0] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
+			ether_type = vlh->h_vlan_encapsulated_proto;
+			pos += sizeof(*vlh);
+			nh.pos = (void *)pos;
+		}
+
+		if (ether_type == NBPF_ETH_P_8021Q ||
+		    ether_type == NBPF_ETH_P_8021AD) {
+			struct vlan_hdr *vlh;
+			if (pos + sizeof(*vlh) > end)
+				goto npu_eth_done;
+			vlh = (struct vlan_hdr *)pos;
+			vlans.id[1] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
+			ether_type = vlh->h_vlan_encapsulated_proto;
+			pos += sizeof(*vlh);
+			nh.pos = (void *)pos;
+		}
+
+npu_eth_done:
+		;
+	}
 #else
 	nh.pos = data;
 	ether_type = parse_ethhdr_vlan(&nh, data_end, &eth, &vlans);
@@ -171,7 +214,11 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	}
 	NBPF_DEBUG_STOP(6);
 
+#ifdef NBPF_NPU
+	if (ether_type != NBPF_ETH_P_IP)
+#else
 	if (ether_type != bpf_htons(ETH_P_IP))
+#endif
 		goto out;
 	NBPF_DEBUG_STOP(7);
 
