@@ -107,7 +107,7 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 
 	NBPF_DEBUG_STOP(3);
 
-	if (data + 1 > data_end)
+	if ((__u8 *)data + 1 > (__u8 *)data_end)
 		return XDP_ABORTED;
 
 	NBPF_DEBUG_STOP(4);
@@ -149,7 +149,7 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 
 	/*old ip hdr backup for re-calculating the checksum later*/
 	oldip = *ip;
-	ip_offset = ((void *)ip - data) & 0x3fff;
+	ip_offset = ((__u8 *)ip - (__u8 *)data) & 0x3fff;
 	len = parse_udphdr(&nh, data_end, &udp);
 	if (len < 0)
 		goto out;
@@ -178,7 +178,7 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	data_end = (void *)(long)ctx->data_end;
 	data = (void *)(long)ctx->data;
 
-	if (data + offset > data_end)
+	if ((__u8 *)data + offset > (__u8 *)data_end)
 		return XDP_ABORTED;
 
 	if (xdp_store_bytes(ctx, 0, buf, static_offset, 0))
@@ -199,8 +199,8 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	if (write_dhcp_option(ctx, offset, &vlans))
 		return XDP_ABORTED;
 
-	ip = data + ip_offset;
-	if (ip + 1 > data_end)
+	ip = (struct iphdr *)((__u8 *)data + ip_offset);
+	if ((__u8 *)(ip + 1) > (__u8 *)data_end)
 		return XDP_ABORTED;
 
 	/* overwrite the destination IP in IP header */
