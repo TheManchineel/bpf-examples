@@ -8,10 +8,8 @@
 #include "dhcp-relay.h"
 
 #ifdef NBPF_DHCP_RELAY_BPF_DEBUG_STOP
-extern void nbpf_bpf_debug_stage(__u32 stage);
 #define NBPF_DEBUG_STOP(STAGE)                                                \
 	do {                                                                  \
-		nbpf_bpf_debug_stage(STAGE);                                  \
 		if (NBPF_DHCP_RELAY_BPF_DEBUG_STOP == (STAGE))                \
 			return XDP_PASS;                                      \
 	} while (0)
