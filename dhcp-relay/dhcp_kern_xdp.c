@@ -7,6 +7,20 @@
 #include <xdp/context_helpers.h>
 #include "dhcp-relay.h"
 
+#ifdef NBPF_DHCP_RELAY_BPF_DEBUG_STOP
+extern void nbpf_bpf_debug_stage(__u32 stage);
+#define NBPF_DEBUG_STOP(STAGE)                                                \
+	do {                                                                  \
+		nbpf_bpf_debug_stage(STAGE);                                  \
+		if (NBPF_DHCP_RELAY_BPF_DEBUG_STOP == (STAGE))                \
+			return XDP_PASS;                                      \
+	} while (0)
+#else
+#define NBPF_DEBUG_STOP(STAGE)                                                \
+	do {                                                                  \
+	} while (0)
+#endif
+
 /*
  * This map is for storing the DHCP relay server
  * IP address configured by user. It is received
@@ -68,8 +82,12 @@ static __u8 buf[static_offset + VLAN_MAX_DEPTH * sizeof(struct vlan_hdr)];
 SEC(XDP_PROG_SEC)
 int xdp_dhcp_relay(struct xdp_md *ctx)
 {
+	NBPF_DEBUG_STOP(1);
+
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
+	NBPF_DEBUG_STOP(2);
+
 	struct collect_vlans vlans = { 0 };
 	struct ethhdr *eth;
 	struct iphdr *ip;
@@ -88,46 +106,63 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	int key = 0;
 	int len = 0;
 
+	NBPF_DEBUG_STOP(3);
+
 	if (data + 1 > data_end)
 		return XDP_ABORTED;
 
+	NBPF_DEBUG_STOP(4);
+
 	nh.pos = data;
 	ether_type = parse_ethhdr_vlan(&nh, data_end, &eth, &vlans);
+	NBPF_DEBUG_STOP(5);
+
 	/* check for valid ether type */
 	if (ether_type < 0) {
 		rc = XDP_ABORTED;
 		goto out;
 	}
+	NBPF_DEBUG_STOP(6);
+
 	if (ether_type != bpf_htons(ETH_P_IP))
 		goto out;
+	NBPF_DEBUG_STOP(7);
 
 	/* Check at least two vlan tags are present */
 	if (vlans.id[1] == 0)
 		goto out;
+	NBPF_DEBUG_STOP(8);
 
 	/* Read dhcp relay server IP from map */
 	dhcp_srv = bpf_map_lookup_elem(&dhcp_server, &key);
 	if (dhcp_srv == NULL)
 		goto out;
+	NBPF_DEBUG_STOP(9);
 
 	h_proto = parse_iphdr(&nh, data_end, &ip);
+	NBPF_DEBUG_STOP(10);
 
 	/* only handle fixed-size IP header due to static copy */
 	if (h_proto != IPPROTO_UDP || ip->ihl > 5) {
 		goto out;
 	}
+	NBPF_DEBUG_STOP(11);
+
 	/*old ip hdr backup for re-calculating the checksum later*/
 	oldip = *ip;
 	ip_offset = ((void *)ip - data) & 0x3fff;
 	len = parse_udphdr(&nh, data_end, &udp);
 	if (len < 0)
 		goto out;
+	NBPF_DEBUG_STOP(12);
 
 	if (udp->dest != bpf_htons(DEST_PORT))
 		goto out;
+	NBPF_DEBUG_STOP(13);
 
 	if (xdp_load_bytes(ctx, 0, buf, static_offset))
 		goto out;
+	NBPF_DEBUG_STOP(14);
 
 	for (i = 0; i < VLAN_MAX_DEPTH; i++) {
 		if (vlans.id[i]) {
