@@ -8,10 +8,11 @@
 #include "dhcp-relay.h"
 
 #ifdef NBPF_DHCP_RELAY_BPF_DEBUG_STOP
+#define NBPF_DEBUG_ACTION_BASE 128
 #define NBPF_DEBUG_STOP(STAGE)                                                \
 	do {                                                                  \
 		if (NBPF_DHCP_RELAY_BPF_DEBUG_STOP == (STAGE))                \
-			return XDP_PASS;                                      \
+			return NBPF_DEBUG_ACTION_BASE + (STAGE);              \
 	} while (0)
 #else
 #define NBPF_DEBUG_STOP(STAGE)                                                \
