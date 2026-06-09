@@ -215,7 +215,7 @@ npu_eth_done:
 	NBPF_DEBUG_STOP(6);
 
 #ifdef NBPF_NPU
-	if (ether_type != NBPF_ETH_P_IP)
+	if (0)
 #else
 	if (ether_type != bpf_htons(ETH_P_IP))
 #endif
