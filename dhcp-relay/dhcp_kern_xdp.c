@@ -31,45 +31,44 @@ static __always_inline __u16 nbpf_load_be16(const void *p)
 	return ((__u16)b[0] << 8) | b[1];
 }
 
-static __always_inline int nbpf_parse_ethhdr_vlan(void *data, void *data_end,
-						  struct ethhdr **ethhdr,
-						  struct collect_vlans *vlans,
-						  void **next_pos)
+static __always_inline void nbpf_store_be16(void *p, __u16 v)
 {
-	struct ethhdr *eth = (struct ethhdr *)data;
-	uintptr_t pos = (uintptr_t)data;
-	uintptr_t end = (uintptr_t)data_end;
-	__u16 h_proto;
-	struct vlan_hdr *vlh;
+	__u8 *b = (__u8 *)p;
+	b[0] = (__u8)(v >> 8);
+	b[1] = (__u8)(v & 0xff);
+}
 
-	if (pos + sizeof(*eth) > end)
-		return -1;
+static __always_inline __u16 nbpf_ipv4_csum_20(const __u8 *ip)
+{
+	__u32 sum = 0;
+	int i;
 
-	pos += sizeof(*eth);
-	*ethhdr = eth;
-	h_proto = eth->h_proto;
-
-	if (proto_is_vlan(h_proto)) {
-		if (pos + sizeof(struct vlan_hdr) > end)
-			goto done;
-		vlh = (struct vlan_hdr *)pos;
-		h_proto = vlh->h_vlan_encapsulated_proto;
-		vlans->id[0] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
-		pos += sizeof(struct vlan_hdr);
+	for (i = 0; i < 20; i += 2) {
+		if (i == 10)
+			continue;
+		sum += nbpf_load_be16(ip + i);
 	}
 
-	if (proto_is_vlan(h_proto)) {
-		if (pos + sizeof(struct vlan_hdr) > end)
-			goto done;
-		vlh = (struct vlan_hdr *)pos;
-		h_proto = vlh->h_vlan_encapsulated_proto;
-		vlans->id[1] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
-		pos += sizeof(struct vlan_hdr);
-	}
+	sum = (sum & 0xffff) + (sum >> 16);
+	sum = (sum & 0xffff) + (sum >> 16);
+	return (__u16)(~sum);
+}
 
-done:
-	*next_pos = (void *)pos;
-	return h_proto;
+static __always_inline int write_dhcp_option_npu(void *ctx, int offset,
+						 struct collect_vlans *vlans)
+{
+	__u8 option[sizeof(struct dhcp_option_82)];
+
+	option[0] = DHO_DHCP_AGENT_OPTIONS;
+	option[1] = 8;
+	option[2] = RAI_CIRCUIT_ID;
+	option[3] = RAI_OPTION_LEN;
+	nbpf_store_be16(option + 4, vlans->id[0]);
+	option[6] = RAI_REMOTE_ID;
+	option[7] = RAI_OPTION_LEN;
+	nbpf_store_be16(option + 8, vlans->id[1]);
+
+	return xdp_store_bytes(ctx, offset, option, sizeof(option), 0);
 }
 #endif
 
@@ -159,6 +158,8 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	int len;
 #ifdef NBPF_NPU
 	int npu_vlan_depth;
+	__u16 npu_ip_header_len;
+	__u16 npu_udp_offset;
 #endif
 
 	NBPF_DEBUG_STOP(3);
@@ -174,6 +175,8 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	len = 0;
 #ifdef NBPF_NPU
 	npu_vlan_depth = 0;
+	npu_ip_header_len = 0;
+	npu_udp_offset = 0;
 #endif
 
 	if (ctx->data + 1 > ctx->data_end)
@@ -237,7 +240,7 @@ npu_eth_done:
 	NBPF_DEBUG_STOP(6);
 
 #ifdef NBPF_NPU
-	if (0)
+	if (ether_type != NBPF_ETH_P_IP)
 #else
 	if (ether_type != bpf_htons(ETH_P_IP))
 #endif
@@ -259,25 +262,82 @@ npu_eth_done:
 		goto out;
 	NBPF_DEBUG_STOP(9);
 
+#ifdef NBPF_NPU
+	{
+		uintptr_t ip_pos = (uintptr_t)nh.pos;
+		uintptr_t end = (uintptr_t)data_end;
+		__u8 ver_ihl;
+
+		if (ip_pos + sizeof(struct iphdr) > end)
+			goto out;
+
+		ver_ihl = *(__u8 *)ip_pos;
+		if ((ver_ihl >> 4) != 4)
+			goto out;
+
+		npu_ip_header_len = (__u16)((ver_ihl & 0x0f) * 4);
+		if (npu_ip_header_len < sizeof(struct iphdr))
+			goto out;
+
+		if (ip_pos + npu_ip_header_len > end)
+			goto out;
+
+		h_proto = *(__u8 *)(ip_pos + 9);
+		ip_offset = (__u16)((ip_pos - (uintptr_t)data) & 0x3fff);
+		nh.pos = (void *)(ip_pos + npu_ip_header_len);
+	}
+#else
 	h_proto = parse_iphdr(&nh, data_end, &ip);
+#endif
 	NBPF_DEBUG_STOP(10);
 
 	/* only handle fixed-size IP header due to static copy */
+#ifdef NBPF_NPU
+	if (h_proto != IPPROTO_UDP || npu_ip_header_len > sizeof(struct iphdr)) {
+		goto out;
+	}
+#else
 	if (h_proto != IPPROTO_UDP || ip->ihl > 5) {
 		goto out;
 	}
+#endif
 	NBPF_DEBUG_STOP(11);
 
 	/*old ip hdr backup for re-calculating the checksum later*/
+#ifdef NBPF_NPU
+	{
+		uintptr_t udp_pos = (uintptr_t)nh.pos;
+		uintptr_t end = (uintptr_t)data_end;
+		int udp_payload_len;
+
+		if (udp_pos + sizeof(struct udphdr) > end)
+			goto out;
+
+		udp_payload_len = (int)nbpf_load_be16((const void *)(udp_pos + 4)) -
+				  (int)sizeof(struct udphdr);
+		if (udp_payload_len < 0)
+			goto out;
+
+		npu_udp_offset = (__u16)((udp_pos - (uintptr_t)data) & 0x3fff);
+		nh.pos = (void *)(udp_pos + sizeof(struct udphdr));
+		len = udp_payload_len;
+	}
+#else
 	oldip = *ip;
 	ip_offset = ((__u8 *)ip - (__u8 *)data) & 0x3fff;
 	len = parse_udphdr(&nh, data_end, &udp);
 	if (len < 0)
 		goto out;
+#endif
 	NBPF_DEBUG_STOP(12);
 
+#ifdef NBPF_NPU
+	if (nbpf_load_be16((const __u8 *)data + npu_udp_offset + 2) != DEST_PORT)
+		goto out;
+#else
 	if (udp->dest != bpf_htons(DEST_PORT))
 		goto out;
+#endif
 	NBPF_DEBUG_STOP(13);
 
 	if (xdp_load_bytes(ctx, 0, buf, static_offset))
@@ -291,19 +351,23 @@ npu_eth_done:
 			offset += 4;
 		}
 	}
+	NBPF_DEBUG_STOP(15);
 
 	/* adjusting the packet head by delta size to insert option82 */
 	if (bpf_xdp_adjust_head(ctx, 0 - delta) < 0)
 		return XDP_ABORTED;
+	NBPF_DEBUG_STOP(16);
 
 	data_end = (void *)(long)ctx->data_end;
 	data = (void *)(long)ctx->data;
 
 	if ((uintptr_t)data + offset > (uintptr_t)data_end)
 		return XDP_ABORTED;
+	NBPF_DEBUG_STOP(17);
 
 	if (xdp_store_bytes(ctx, 0, buf, static_offset, 0))
 		return XDP_ABORTED;
+	NBPF_DEBUG_STOP(18);
 
 	if (offset > static_offset) {
 		offset = static_offset;
@@ -316,20 +380,53 @@ npu_eth_done:
 			}
 		}
 	}
+	NBPF_DEBUG_STOP(19);
 
+#ifdef NBPF_NPU
+	if (write_dhcp_option_npu(ctx, offset, &vlans))
+#else
 	if (write_dhcp_option(ctx, offset, &vlans))
+#endif
 		return XDP_ABORTED;
+	NBPF_DEBUG_STOP(20);
 
+#ifdef NBPF_NPU
+	{
+		__u8 *ip_bytes = (__u8 *)data + ip_offset;
+		__u8 *server = (__u8 *)dhcp_srv;
+		__u16 csum;
+
+		if ((uintptr_t)(ip_bytes + sizeof(struct iphdr)) >
+		    (uintptr_t)data_end)
+			return XDP_ABORTED;
+		NBPF_DEBUG_STOP(21);
+
+		ip_bytes[16] = server[0];
+		ip_bytes[17] = server[1];
+		ip_bytes[18] = server[2];
+		ip_bytes[19] = server[3];
+		NBPF_DEBUG_STOP(22);
+
+		ip_bytes[10] = 0;
+		ip_bytes[11] = 0;
+		csum = nbpf_ipv4_csum_20(ip_bytes);
+		nbpf_store_be16(ip_bytes + 10, csum);
+	}
+#else
 	ip = (struct iphdr *)((__u8 *)data + ip_offset);
 	if ((uintptr_t)(ip + 1) > (uintptr_t)data_end)
 		return XDP_ABORTED;
+	NBPF_DEBUG_STOP(21);
 
 	/* overwrite the destination IP in IP header */
 	ip->daddr = *dhcp_srv;
+	NBPF_DEBUG_STOP(22);
 
 	//re-calc ip checksum
 	__u32 sum = calc_ip_csum(&oldip, ip, oldip.check);
 	ip->check = ~sum;
+#endif
+	NBPF_DEBUG_STOP(23);
 	rc = XDP_PASS;
 	goto out;
 
