@@ -21,9 +21,15 @@
 #endif
 
 #ifdef NBPF_NPU
-#define NBPF_ETH_P_IP ((__u16)0x0008)
-#define NBPF_ETH_P_8021Q ((__u16)0x0081)
-#define NBPF_ETH_P_8021AD ((__u16)0xa888)
+#define NBPF_ETH_P_IP ((__u16)0x0800)
+#define NBPF_ETH_P_8021Q ((__u16)0x8100)
+#define NBPF_ETH_P_8021AD ((__u16)0x88a8)
+
+static __always_inline __u16 nbpf_load_be16(const void *p)
+{
+	const __u8 *b = (const __u8 *)p;
+	return ((__u16)b[0] << 8) | b[1];
+}
 
 static __always_inline int nbpf_parse_ethhdr_vlan(void *data, void *data_end,
 						  struct ethhdr **ethhdr,
@@ -151,6 +157,9 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	int h_proto = 0;
 	int key = 0;
 	int len = 0;
+#ifdef NBPF_NPU
+	int npu_vlan_depth = 0;
+#endif
 
 	NBPF_DEBUG_STOP(3);
 
@@ -171,31 +180,31 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 
 		eth = (struct ethhdr *)pos;
 		pos += sizeof(*eth);
-		ether_type = eth->h_proto;
+		ether_type = nbpf_load_be16((const __u8 *)eth + 12);
 		nh.pos = (void *)pos;
 
 		if (ether_type == NBPF_ETH_P_8021Q ||
 		    ether_type == NBPF_ETH_P_8021AD) {
-			struct vlan_hdr *vlh;
-			if (pos + sizeof(*vlh) > end)
+			if (pos + sizeof(struct vlan_hdr) > end)
 				goto npu_eth_done;
-			vlh = (struct vlan_hdr *)pos;
-			vlans.id[0] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
-			ether_type = vlh->h_vlan_encapsulated_proto;
-			pos += sizeof(*vlh);
+			vlans.id[0] = nbpf_load_be16((const void *)pos) &
+				       VLAN_VID_MASK;
+			ether_type = nbpf_load_be16((const void *)(pos + 2));
+			pos += sizeof(struct vlan_hdr);
 			nh.pos = (void *)pos;
+			npu_vlan_depth = 1;
 		}
 
 		if (ether_type == NBPF_ETH_P_8021Q ||
 		    ether_type == NBPF_ETH_P_8021AD) {
-			struct vlan_hdr *vlh;
-			if (pos + sizeof(*vlh) > end)
+			if (pos + sizeof(struct vlan_hdr) > end)
 				goto npu_eth_done;
-			vlh = (struct vlan_hdr *)pos;
-			vlans.id[1] = bpf_ntohs(vlh->h_vlan_TCI) & VLAN_VID_MASK;
-			ether_type = vlh->h_vlan_encapsulated_proto;
-			pos += sizeof(*vlh);
+			vlans.id[1] = nbpf_load_be16((const void *)pos) &
+				       VLAN_VID_MASK;
+			ether_type = nbpf_load_be16((const void *)(pos + 2));
+			pos += sizeof(struct vlan_hdr);
 			nh.pos = (void *)pos;
+			npu_vlan_depth = 2;
 		}
 
 npu_eth_done:
@@ -223,7 +232,11 @@ npu_eth_done:
 	NBPF_DEBUG_STOP(7);
 
 	/* Check at least two vlan tags are present */
+#ifdef NBPF_NPU
+	if (npu_vlan_depth < 2)
+#else
 	if (vlans.id[1] == 0)
+#endif
 		goto out;
 	NBPF_DEBUG_STOP(8);
 
