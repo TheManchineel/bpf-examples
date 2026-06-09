@@ -107,7 +107,7 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 
 	NBPF_DEBUG_STOP(3);
 
-	if ((__u8 *)data + 1 > (__u8 *)data_end)
+	if (ctx->data + 1 > ctx->data_end)
 		return XDP_ABORTED;
 
 	NBPF_DEBUG_STOP(4);
@@ -178,7 +178,7 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 	data_end = (void *)(long)ctx->data_end;
 	data = (void *)(long)ctx->data;
 
-	if ((__u8 *)data + offset > (__u8 *)data_end)
+	if ((uintptr_t)data + offset > (uintptr_t)data_end)
 		return XDP_ABORTED;
 
 	if (xdp_store_bytes(ctx, 0, buf, static_offset, 0))
@@ -200,7 +200,7 @@ int xdp_dhcp_relay(struct xdp_md *ctx)
 		return XDP_ABORTED;
 
 	ip = (struct iphdr *)((__u8 *)data + ip_offset);
-	if ((__u8 *)(ip + 1) > (__u8 *)data_end)
+	if ((uintptr_t)(ip + 1) > (uintptr_t)data_end)
 		return XDP_ABORTED;
 
 	/* overwrite the destination IP in IP header */
