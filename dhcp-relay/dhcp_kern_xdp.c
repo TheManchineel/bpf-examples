@@ -7,11 +7,128 @@
 #include <xdp/context_helpers.h>
 #include "dhcp-relay.h"
 
-#if defined(NBPF_NPU) && defined(NBPF_DHCP_RELAY_TRACE_STAGES)
-#define NBPF_TRACE_STAGE(STAGE) (ctx->rx_queue_index = (__u32)(STAGE))
-#else
-#define NBPF_TRACE_STAGE(STAGE) ((void)0)
+#ifndef NBPF_DHCP_RELAY_TRACE_STAGE
+#define NBPF_DHCP_RELAY_TRACE_STAGE 0
 #endif
+
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 1
+#define NBPF_TRACE_STAGE_1() (ctx->rx_queue_index = 1)
+#else
+#define NBPF_TRACE_STAGE_1() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 2
+#define NBPF_TRACE_STAGE_2() (ctx->rx_queue_index = 2)
+#else
+#define NBPF_TRACE_STAGE_2() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 3
+#define NBPF_TRACE_STAGE_3() (ctx->rx_queue_index = 3)
+#else
+#define NBPF_TRACE_STAGE_3() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 4
+#define NBPF_TRACE_STAGE_4() (ctx->rx_queue_index = 4)
+#else
+#define NBPF_TRACE_STAGE_4() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 5
+#define NBPF_TRACE_STAGE_5() (ctx->rx_queue_index = 5)
+#else
+#define NBPF_TRACE_STAGE_5() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 6
+#define NBPF_TRACE_STAGE_6() (ctx->rx_queue_index = 6)
+#else
+#define NBPF_TRACE_STAGE_6() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 7
+#define NBPF_TRACE_STAGE_7() (ctx->rx_queue_index = 7)
+#else
+#define NBPF_TRACE_STAGE_7() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 8
+#define NBPF_TRACE_STAGE_8() (ctx->rx_queue_index = 8)
+#else
+#define NBPF_TRACE_STAGE_8() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 9
+#define NBPF_TRACE_STAGE_9() (ctx->rx_queue_index = 9)
+#else
+#define NBPF_TRACE_STAGE_9() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 10
+#define NBPF_TRACE_STAGE_10() (ctx->rx_queue_index = 10)
+#else
+#define NBPF_TRACE_STAGE_10() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 11
+#define NBPF_TRACE_STAGE_11() (ctx->rx_queue_index = 11)
+#else
+#define NBPF_TRACE_STAGE_11() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 12
+#define NBPF_TRACE_STAGE_12() (ctx->rx_queue_index = 12)
+#else
+#define NBPF_TRACE_STAGE_12() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 13
+#define NBPF_TRACE_STAGE_13() (ctx->rx_queue_index = 13)
+#else
+#define NBPF_TRACE_STAGE_13() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 14
+#define NBPF_TRACE_STAGE_14() (ctx->rx_queue_index = 14)
+#else
+#define NBPF_TRACE_STAGE_14() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 15
+#define NBPF_TRACE_STAGE_15() (ctx->rx_queue_index = 15)
+#else
+#define NBPF_TRACE_STAGE_15() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 16
+#define NBPF_TRACE_STAGE_16() (ctx->rx_queue_index = 16)
+#else
+#define NBPF_TRACE_STAGE_16() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 17
+#define NBPF_TRACE_STAGE_17() (ctx->rx_queue_index = 17)
+#else
+#define NBPF_TRACE_STAGE_17() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 18
+#define NBPF_TRACE_STAGE_18() (ctx->rx_queue_index = 18)
+#else
+#define NBPF_TRACE_STAGE_18() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 19
+#define NBPF_TRACE_STAGE_19() (ctx->rx_queue_index = 19)
+#else
+#define NBPF_TRACE_STAGE_19() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 20
+#define NBPF_TRACE_STAGE_20() (ctx->rx_queue_index = 20)
+#else
+#define NBPF_TRACE_STAGE_20() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 21
+#define NBPF_TRACE_STAGE_21() (ctx->rx_queue_index = 21)
+#else
+#define NBPF_TRACE_STAGE_21() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 22
+#define NBPF_TRACE_STAGE_22() (ctx->rx_queue_index = 22)
+#else
+#define NBPF_TRACE_STAGE_22() ((void)0)
+#endif
+#if defined(NBPF_NPU) && NBPF_DHCP_RELAY_TRACE_STAGE == 23
+#define NBPF_TRACE_STAGE_23() (ctx->rx_queue_index = 23)
+#else
+#define NBPF_TRACE_STAGE_23() ((void)0)
+#endif
+
+#define NBPF_TRACE_STAGE_SELECT(STAGE) NBPF_TRACE_STAGE_##STAGE()
+#define NBPF_TRACE_STAGE(STAGE) NBPF_TRACE_STAGE_SELECT(STAGE)
 
 #ifdef NBPF_DHCP_RELAY_BPF_DEBUG_STOP
 #define NBPF_DEBUG_ACTION_BASE 128
