@@ -8,7 +8,7 @@
 #include "dhcp-relay.h"
 
 #if defined(NBPF_NPU) && defined(NBPF_DHCP_RELAY_TRACE_STAGES)
-#define NBPF_TRACE_STAGE(STAGE) nbpf_bpf_debug_stage((__u32)(STAGE))
+#define NBPF_TRACE_STAGE(STAGE) (ctx->rx_queue_index = (__u32)(STAGE))
 #else
 #define NBPF_TRACE_STAGE(STAGE) ((void)0)
 #endif
