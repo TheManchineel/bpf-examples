@@ -7,13 +7,20 @@
 #include <xdp/context_helpers.h>
 #include "dhcp-relay.h"
 
+#if defined(NBPF_NPU) && defined(NBPF_DHCP_RELAY_TRACE_STAGES)
+#define NBPF_TRACE_STAGE(STAGE) nbpf_bpf_debug_stage((__u32)(STAGE))
+#else
+#define NBPF_TRACE_STAGE(STAGE) ((void)0)
+#endif
+
 #ifdef NBPF_DHCP_RELAY_BPF_DEBUG_STOP
 #define NBPF_DEBUG_ACTION_BASE 128
 #define NBPF_DEBUG_STOP(STAGE)                                                \
+	NBPF_TRACE_STAGE(STAGE);                                               \
 	if (NBPF_DHCP_RELAY_BPF_DEBUG_STOP == (STAGE))                        \
 		return NBPF_DEBUG_ACTION_BASE + (STAGE)
 #else
-#define NBPF_DEBUG_STOP(STAGE) ((void)0)
+#define NBPF_DEBUG_STOP(STAGE) NBPF_TRACE_STAGE(STAGE)
 #endif
 
 #ifdef NBPF_NPU
