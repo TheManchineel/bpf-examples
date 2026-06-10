@@ -10,14 +10,10 @@
 #ifdef NBPF_DHCP_RELAY_BPF_DEBUG_STOP
 #define NBPF_DEBUG_ACTION_BASE 128
 #define NBPF_DEBUG_STOP(STAGE)                                                \
-	do {                                                                  \
-		if (NBPF_DHCP_RELAY_BPF_DEBUG_STOP == (STAGE))                \
-			return NBPF_DEBUG_ACTION_BASE + (STAGE);              \
-	} while (0)
+	if (NBPF_DHCP_RELAY_BPF_DEBUG_STOP == (STAGE))                        \
+		return NBPF_DEBUG_ACTION_BASE + (STAGE)
 #else
-#define NBPF_DEBUG_STOP(STAGE)                                                \
-	do {                                                                  \
-	} while (0)
+#define NBPF_DEBUG_STOP(STAGE) ((void)0)
 #endif
 
 #ifdef NBPF_NPU
